@@ -1,0 +1,12 @@
+package org.levi.learn.annotation;
+
+import java.lang.annotation.*;
+
+/**
+ * @author DevCenter
+ */
+@Documented
+@Target(ElementType.FIELD)
+@Retention(RetentionPolicy.RUNTIME)
+public @interface Autowired {
+}
