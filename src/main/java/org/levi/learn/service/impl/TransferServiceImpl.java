@@ -16,7 +16,7 @@ public class TransferServiceImpl implements TransferService {
     public void transfer(int form, int to, int money) {
             int initalMoney = 10000;
             accountMapper.updateById(initalMoney+money,to);
-            int a = 1/0;
+//            int a = 1/0;
             accountMapper.updateById(initalMoney-money,form);
     }
 }

@@ -54,7 +54,7 @@ public class AnnotationContextBeanFactory extends AbstractBeanFactory{
     /**
      * 容器初始化
      */
-    public void init() throws IOException, IllegalAccessException, InstantiationException {
+    public void init() throws IOException, IllegalAccessException, InstantiationException, ClassNotFoundException {
         //获取包路径下所有class文件
         ClassPathResourceScanner classPathResourceScanner = new ClassPathResourceScanner();
         Set<Class<?>> candidateComponents = classPathResourceScanner.findCandidateComponents(this.componentScanPath);
@@ -80,19 +80,21 @@ public class AnnotationContextBeanFactory extends AbstractBeanFactory{
 //        clazz.getAnnotations()[0].annotationType().name
     }
 
-    private Object createProxy(Object bean, Class clazz) {
+    private Object createProxy(Object bean, Class clazz) throws ClassNotFoundException {
 
         Class[] interfaces = clazz.getInterfaces();
 
         if(interfaces.length>0){
             //有接口的情况下 使用jdk动态代理
-            Object transactionProxyBean = Proxy.newProxyInstance(bean.getClass().getClassLoader(), new Class[]{interfaces[0].getClass()}, new InvocationHandler() {
+
+            Class<?> aClass = Class.forName(interfaces[0].getName());
+            Object transactionProxyBean = Proxy.newProxyInstance(aClass.getClassLoader(), new Class[]{aClass}, new InvocationHandler() {
 
                 TransactionManager transactionManager = TransactionManager.newInstance(SqlSessionUtil.getSqlSessionFactory());
 
                 @Override
                 public Object invoke(Object proxy, Method method, Object[] args) throws Throwable {
-                    try{
+/*                    try{
                         transactionManager.startTransaction();
                         SqlSession sqlSession = transactionManager.getSqlSession();
                         Field[] declaredFields = clazz.getDeclaredFields();
@@ -100,17 +102,19 @@ public class AnnotationContextBeanFactory extends AbstractBeanFactory{
                         for (Field declaredField : declaredFields) {
                             if(declaredField.getAnnotationsByType(Autowired.class)!=null && declaredField.getName().contains("Mapper")){
                                 Object mapper = sqlSession.getMapper(declaredField.getType());
-                                declaredField.set(proxy,mapper);
+                                declaredField.set(bean,mapper);
                             }
                         }
                         //设置属性代理
-                        Object result = method.invoke(args);
+                        Object result = method.invoke(bean,args);
                         transactionManager.commit();
                         return result;
+
                     }catch (Exception e){
                         transactionManager.rollback();
                         return null;
-                    }
+                    }*/
+                   return method.invoke(bean,args);
 
                 }
             });
