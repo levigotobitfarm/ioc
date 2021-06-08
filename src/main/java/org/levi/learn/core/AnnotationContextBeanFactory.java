@@ -1,13 +1,21 @@
 package org.levi.learn.core;
 
+import org.apache.ibatis.session.SqlSession;
+import org.levi.learn.annotation.Autowired;
 import org.levi.learn.annotation.Service;
+import org.levi.learn.annotation.Transactional;
+import org.levi.learn.transaction.TransactionManager;
 import org.levi.learn.util.AnnotationUtil;
 import org.levi.learn.util.ClassPathResourceScanner;
+import org.levi.learn.util.SqlSessionUtil;
 import org.levi.learn.util.StringUtil;
 
 import java.io.IOException;
 import java.lang.annotation.Annotation;
 import java.lang.reflect.Field;
+import java.lang.reflect.InvocationHandler;
+import java.lang.reflect.Method;
+import java.lang.reflect.Proxy;
 import java.util.Set;
 
 /**
@@ -61,11 +69,57 @@ public class AnnotationContextBeanFactory extends AbstractBeanFactory{
                     beanId = value;
                 }
                 Object bean = createBean(clazz);
+                Annotation transactionAnnotation = clazz.getAnnotation(Transactional.class);
+                if(transactionAnnotation != null){
+                    bean = createProxy(bean,clazz);
+                }
                 this.singletonBeanMap.put(beanId,bean);
             }
 
         }
 //        clazz.getAnnotations()[0].annotationType().name
+    }
+
+    private Object createProxy(Object bean, Class clazz) {
+
+        Class[] interfaces = clazz.getInterfaces();
+
+        if(interfaces.length>0){
+            //有接口的情况下 使用jdk动态代理
+            Object transactionProxyBean = Proxy.newProxyInstance(bean.getClass().getClassLoader(), new Class[]{interfaces[0].getClass()}, new InvocationHandler() {
+
+                TransactionManager transactionManager = TransactionManager.newInstance(SqlSessionUtil.getSqlSessionFactory());
+
+                @Override
+                public Object invoke(Object proxy, Method method, Object[] args) throws Throwable {
+                    try{
+                        transactionManager.startTransaction();
+                        SqlSession sqlSession = transactionManager.getSqlSession();
+                        Field[] declaredFields = clazz.getDeclaredFields();
+
+                        for (Field declaredField : declaredFields) {
+                            if(declaredField.getAnnotationsByType(Autowired.class)!=null && declaredField.getName().contains("Mapper")){
+                                Object mapper = sqlSession.getMapper(declaredField.getType());
+                                declaredField.set(proxy,mapper);
+                            }
+                        }
+                        //设置属性代理
+                        Object result = method.invoke(args);
+                        transactionManager.commit();
+                        return result;
+                    }catch (Exception e){
+                        transactionManager.rollback();
+                        return null;
+                    }
+
+                }
+            });
+            return transactionProxyBean;
+        }else{
+            //cglib 代理实现
+            return bean;
+        }
+
     }
 
     private Object createBean(Class clazz) throws IllegalAccessException, InstantiationException {
@@ -84,9 +138,10 @@ public class AnnotationContextBeanFactory extends AbstractBeanFactory{
                     if(fieldBean == null){
                         //判断是否已*Mapper结尾，如果受transaction控制，则在动态代理时重新获取一个对应mapper
                         if(beanId.endsWith("Mapper")){
-
+                            fieldBean = SqlSessionUtil.getSqlSession().getMapper(declaredField.getType());
+                        }else{
+                            fieldBean = this.createBean(declaredField.getType());
                         }
-                        fieldBean = this.createBean(declaredField.getType());
                         declaredField.set(bean,fieldBean);
                     }
                 }
