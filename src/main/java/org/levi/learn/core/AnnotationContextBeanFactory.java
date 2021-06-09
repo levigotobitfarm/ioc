@@ -1,5 +1,9 @@
 package org.levi.learn.core;
 
+import net.sf.cglib.proxy.Callback;
+import net.sf.cglib.proxy.Enhancer;
+import net.sf.cglib.proxy.MethodInterceptor;
+import net.sf.cglib.proxy.MethodProxy;
 import org.apache.ibatis.session.SqlSession;
 import org.levi.learn.annotation.Autowired;
 import org.levi.learn.annotation.Service;
@@ -89,40 +93,60 @@ public class AnnotationContextBeanFactory extends AbstractBeanFactory{
 
             Class<?> aClass = Class.forName(interfaces[0].getName());
             Object transactionProxyBean = Proxy.newProxyInstance(aClass.getClassLoader(), new Class[]{aClass}, new InvocationHandler() {
-
                 TransactionManager transactionManager = TransactionManager.newInstance(SqlSessionUtil.getSqlSessionFactory());
-
                 @Override
                 public Object invoke(Object proxy, Method method, Object[] args) throws Throwable {
-                    try{
-                        transactionManager.startTransaction();
-                        SqlSession sqlSession = transactionManager.getSqlSession();
-                        Field[] declaredFields = clazz.getDeclaredFields();
-
-                        for (Field declaredField : declaredFields) {
-                            if(declaredField.getAnnotationsByType(Autowired.class).length>0 && declaredField.getName().contains("Mapper")){
-                                Object mapper = sqlSession.getMapper(declaredField.getType());
-                                declaredField.setAccessible(true);
-                                declaredField.set(bean,mapper);
-                            }
-                        }
-                        //设置属性代理
-                        Object result = method.invoke(bean,args);
-                        transactionManager.commit();
-                        return result;
-
-                    }catch (Exception e){
-                        transactionManager.rollback();
-                        return null;
-                    }
+                    return ivokeMethod(method, args, transactionManager, clazz, bean);
                 }
+
+
             });
             return transactionProxyBean;
         }else{
             //cglib 代理实现
-            return bean;
+            Enhancer enhancer = new Enhancer();
+            enhancer.setSuperclass(bean.getClass());
+            enhancer.setCallback(new MethodInterceptor() {
+                TransactionManager transactionManager = TransactionManager.newInstance(SqlSessionUtil.getSqlSessionFactory());
+                @Override
+                public Object intercept(Object o, Method method, Object[] objects, MethodProxy methodProxy) throws Throwable {
+                    return ivokeMethod(method, objects, transactionManager, clazz, bean);
+                }
+
+
+            });
+            return enhancer.create();
         }
 
+    }
+    private Object ivokeMethod(Method method, Object[] args, TransactionManager transactionManager, Class clazz, Object bean) {
+        try{
+            transactionManager.startTransaction();
+            proxyMapper(transactionManager, clazz, bean);
+            //设置属性代理
+            Object result = method.invoke(bean,args);
+            transactionManager.commit();
+            return result;
+
+        }catch (Exception e){
+            transactionManager.rollback();
+            return null;
+        }
+    }
+
+
+    private void proxyMapper(TransactionManager transactionManager, Class clazz, Object bean) throws IllegalAccessException {
+
+        SqlSession sqlSession = transactionManager.getSqlSession();
+        Field[] declaredFields = clazz.getDeclaredFields();
+
+        for (Field declaredField : declaredFields) {
+            if(declaredField.getAnnotationsByType(Autowired.class).length>0 && declaredField.getName().contains("Mapper")){
+                Object mapper = sqlSession.getMapper(declaredField.getType());
+                declaredField.setAccessible(true);
+                declaredField.set(bean,mapper);
+            }
+        }
     }
 
     private Object createBean(Class clazz) throws IllegalAccessException, InstantiationException {

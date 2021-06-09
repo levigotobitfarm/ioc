@@ -4,7 +4,6 @@ import org.junit.Test;
 import org.levi.learn.bean.Person;
 import org.levi.learn.core.AnnotationContextBeanFactory;
 import org.levi.learn.service.TransferService;
-import org.levi.learn.service.impl.TransferServiceImpl;
 
 import java.io.IOException;
 
@@ -23,6 +22,6 @@ public class TestIoc {
         AnnotationContextBeanFactory annotationContextBeanFactory = new AnnotationContextBeanFactory("org.levi.learn.service");
         annotationContextBeanFactory.init();
         TransferService transferService = (TransferService) annotationContextBeanFactory.getBean("transferServiceImpl");
-        transferService.transfer(1,2,3000);
+        transferService.transfer(1,2,2000);
     }
 }
