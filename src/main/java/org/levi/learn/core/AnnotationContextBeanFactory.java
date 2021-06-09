@@ -94,14 +94,15 @@ public class AnnotationContextBeanFactory extends AbstractBeanFactory{
 
                 @Override
                 public Object invoke(Object proxy, Method method, Object[] args) throws Throwable {
-/*                    try{
+                    try{
                         transactionManager.startTransaction();
                         SqlSession sqlSession = transactionManager.getSqlSession();
                         Field[] declaredFields = clazz.getDeclaredFields();
 
                         for (Field declaredField : declaredFields) {
-                            if(declaredField.getAnnotationsByType(Autowired.class)!=null && declaredField.getName().contains("Mapper")){
+                            if(declaredField.getAnnotationsByType(Autowired.class).length>0 && declaredField.getName().contains("Mapper")){
                                 Object mapper = sqlSession.getMapper(declaredField.getType());
+                                declaredField.setAccessible(true);
                                 declaredField.set(bean,mapper);
                             }
                         }
@@ -113,9 +114,7 @@ public class AnnotationContextBeanFactory extends AbstractBeanFactory{
                     }catch (Exception e){
                         transactionManager.rollback();
                         return null;
-                    }*/
-                   return method.invoke(bean,args);
-
+                    }
                 }
             });
             return transactionProxyBean;
